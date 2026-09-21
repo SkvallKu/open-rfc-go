@@ -53,6 +53,14 @@ type Destination struct {
 	SOCKS5           *SOCKS5Options
 	Pool             PoolConfig
 	OperationTimeout time.Duration
+	// CpicStreaming admits an outgoing call whose encoded application data
+	// exceeds the compact 28000-byte F_SAP_SEND slice, by streaming it as
+	// F_ASEND_DATA/F_SEND_DATA/F_RECEIVE instead of failing with "CPIC
+	// streaming is disabled". Off by default: unverified against a live
+	// system as of this option's introduction (see
+	// docs/architecture.md's evidence hierarchy) — turn it on deliberately,
+	// not as a blanket default, until a destination has proven it.
+	CpicStreaming bool
 	// Callbacks handles server-initiated RFC callbacks (a called FM doing
 	// CALL FUNCTION … DESTINATION 'BACK') by function-module name. Leave nil if
 	// the destination is never expected to call back.
@@ -86,6 +94,7 @@ func Open(ctx context.Context, d Destination) (*Client, error) {
 			ApplicationServerService: d.Service,
 			ProgramName:              d.ProgramName,
 			OperationTimeout:         d.OperationTimeout,
+			CpicStreaming:            d.CpicStreaming,
 		}
 		if d.Router != "" {
 			route, err := saprouter.CompleteRoute(d.Router, d.Host, d.Port)
