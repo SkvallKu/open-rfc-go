@@ -1,0 +1,44 @@
+name: Fork CI
+
+# ci.yml (upstream) only runs for main; this covers the fork's patched branch.
+# Kept as a separate file so upstream syncs never conflict on it.
+on:
+  push:
+    branches: [patched]
+  pull_request:
+    branches: [patched]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  result:
+    name: gofmt · vet · build · test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Verify formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "${unformatted}" ]; then
+            echo "gofmt reported unformatted files:"
+            echo "${unformatted}"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
+      - name: Test
+        run: go test -race -shuffle=on ./...
