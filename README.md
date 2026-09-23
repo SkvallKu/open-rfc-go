@@ -1,3 +1,5 @@
+> **Fork** of oisee/open-rfc-go with opt-in CPIC streaming — see [FORK.md](FORK.md) · [Русский](FORK.ru.md)
+
 <img src="docs/assets/logo.svg" alt="open-rfc-go" width="640">
 
 ```
