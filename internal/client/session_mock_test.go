@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"testing"
 
 	"github.com/oisee/open-rfc-go/internal/appc"
@@ -151,5 +152,50 @@ func TestSessionRejectsWrongCodePage(t *testing.T) {
 	mock := &mockTransport{replies: [][]byte{gw}}
 	if _, err := Open(context.Background(), SessionOptions{Host: "mock", Port: 3200, ApplicationServerService: "sapdp00", Transport: mock}); err == nil {
 		t.Fatal("expected code-page rejection")
+	}
+}
+
+// A logon SAP answers with a refusal is ErrLogonRefused; one that gets no
+// answer is not, so a caller can stop retrying only the first.
+func TestLogonRefusalIsToldFromNoAnswer(t *testing.T) {
+	refused, err := cpic.EncodeFieldChain(uint16(cpic.TagStart), []cpic.Field{
+		{Tag: uint16(cpic.TagProtocolVersion), Value: mustHex(t, "00000e0b")},
+		{Tag: uint16(cpic.TagCapabilities), Value: make([]byte, 11)},
+		{Tag: uint16(cpic.TagLogonStatus), Value: []byte{1}},
+		{Tag: uint16(cpic.TagEnd), Value: nil},
+	}, cpic.FieldChainLimits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refusal := append(mustHex(t, "010100080101010504010003"), refused...)
+	refusal = append(refusal, 0xff, 0xff)
+
+	convID := []byte("CONV0001")
+	for _, tc := range []struct {
+		name    string
+		reply   []byte
+		refused bool
+	}{
+		{"refused", refusal, true},
+		{"no answer", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			replies := handshakeReplies(t, convID, 7)
+			if tc.reply != nil {
+				replies = append(replies, incomingDataRecord(convID, 7, appc.VectorEndOfMessage|0x08, tc.reply))
+			}
+			ctx := context.Background()
+			sess, err := Open(ctx, SessionOptions{Host: "mock", Port: 3200, ApplicationServerService: "sapdp00", Transport: &mockTransport{replies: replies}})
+			if err != nil {
+				t.Fatalf("open: %v", err)
+			}
+			err = sess.LogonAndPing(ctx, LogonOptions{Client: "001", User: "TESTER", Password: "wrong"})
+			if err == nil {
+				t.Fatal("logon succeeded")
+			}
+			if got := errors.Is(err, ErrLogonRefused); got != tc.refused {
+				t.Errorf("errors.Is(%v, ErrLogonRefused) = %v, want %v", err, got, tc.refused)
+			}
+		})
 	}
 }

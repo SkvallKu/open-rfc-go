@@ -21,7 +21,8 @@ var (
 	ErrClosed = errors.New("rfc: closed")
 	// ErrNotAuthenticated reports a call before a successful logon.
 	ErrNotAuthenticated = errors.New("rfc: not authenticated")
-	// ErrLogonRejected reports that the system refused the logon credentials.
+	// ErrLogonRejected reports that the system answered the logon and refused
+	// it. A logon that got no answer is ErrTransport.
 	ErrLogonRejected = errors.New("rfc: logon rejected")
 	// ErrProtocol reports a malformed or unexpected server exchange.
 	ErrProtocol = errors.New("rfc: protocol error")

@@ -4,6 +4,7 @@ package rfc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -118,7 +119,7 @@ func Open(ctx context.Context, d Destination) (*Client, error) {
 			Language: d.Language,
 		}); err != nil {
 			_ = sess.Close()
-			return nil, fmt.Errorf("%w: %v", ErrLogonRejected, err)
+			return nil, logonError(err)
 		}
 		return lifecycle.Wrap(sess), nil
 	}
@@ -265,4 +266,19 @@ func (c *Client) structureDefinitionOn(ctx context.Context, sess *lifecycle.Mana
 	c.structCache[name] = def
 	c.mu.Unlock()
 	return def, nil
+}
+
+// logonError classifies a failed logon. Only a refusal SAP answered is
+// ErrLogonRejected: a caller may stop trying the same credentials on it, as
+// each try counts against login/fails_to_user_lock. A logon that got no
+// answer is ErrTransport and may be tried again; a malformed one, ErrProtocol.
+func logonError(err error) error {
+	switch {
+	case errors.Is(err, client.ErrLogonRefused):
+		return fmt.Errorf("%w: %v", ErrLogonRejected, err)
+	case errors.Is(err, client.ErrSession):
+		return fmt.Errorf("%w: %v", ErrProtocol, err)
+	default:
+		return fmt.Errorf("%w: %v", ErrTransport, err)
+	}
 }

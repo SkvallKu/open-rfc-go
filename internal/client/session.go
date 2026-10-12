@@ -45,6 +45,11 @@ import (
 // ErrSession reports a session-level protocol or state error.
 var ErrSession = errors.New("client: cpic session")
 
+// ErrLogonRefused reports that SAP answered the logon and refused it: wrong
+// credentials, a locked user, an unknown client. A logon that never got an
+// answer is not one.
+var ErrLogonRefused = fmt.Errorf("%w: logon refused", ErrSession)
+
 // Transport is the byte-record transport a session drives.
 type Transport interface {
 	Send(payload []byte) error
@@ -379,12 +384,12 @@ func (s *Session) LogonAndPing(ctx context.Context, opts LogonOptions) error {
 	}
 	if !decoded.Success {
 		if decoded.Rejection != nil && decoded.Rejection.Text != "" {
-			return fmt.Errorf("%w: SAP rejected logon: %s", ErrSession, decoded.Rejection.Text)
+			return fmt.Errorf("%w: SAP rejected logon: %s", ErrLogonRefused, decoded.Rejection.Text)
 		}
 		if decoded.Status != nil {
-			return fmt.Errorf("%w: SAP rejected logon with status %d", ErrSession, *decoded.Status)
+			return fmt.Errorf("%w: SAP rejected logon with status %d", ErrLogonRefused, *decoded.Status)
 		}
-		return fmt.Errorf("%w: SAP rejected the initial CPIC logon", ErrSession)
+		return fmt.Errorf("%w: SAP rejected the initial CPIC logon", ErrLogonRefused)
 	}
 	s.cpicSessionID = sessionID
 	s.authenticated = true
